@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flydog-cra373"
+version = "0.1.0"
+description = "FlyDrones brain to CRA373 locomotion policy bridge"
+requires-python = ">=3.10"
+dependencies = ["flydrones>=0.1.0", "numpy>=1.24", "matplotlib>=3.7", "pillow>=9", "pyyaml>=6"]
+
+[project.scripts]
+flydog-demo = "flydog.demo:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
