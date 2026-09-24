@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+/home/dog101/CRA373_new/CRA373
+/home/dog101/CRA373_new/CRA373_12313/manager_based_check
+
+
+logs/
+outputs/
+runs/
+checkpoints/
+*.pt
+*.pth

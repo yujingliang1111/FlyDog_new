@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.metadata
 import math
 import os
 import sys
@@ -29,6 +30,8 @@ def main() -> int:
     from isaaclab.app import AppLauncher
     AppLauncher.add_app_launcher_args(parser)
     args = parser.parse_args()
+    if args.visualizer is None and not args.headless and args.livestream in (-1, 0):
+        args.visualizer = ["kit"]
     root = args.cra373_root.expanduser().resolve()
     checkpoint = args.checkpoint.expanduser().resolve()
     if not (root / "cra373" / "envs" / "__init__.py").is_file():
@@ -47,13 +50,20 @@ def main() -> int:
         import torch
         import isaaclab_tasks  # noqa: F401 - registers base Isaac Lab tasks
         import cra373.envs  # noqa: F401 - registers CRA373 tasks
-        from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+        from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper, handle_deprecated_rsl_rl_cfg
         from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry, parse_env_cfg
         from rsl_rl.runners import OnPolicyRunner
         from flydog.bridge import FlyDogBridge
 
-        env_cfg = parse_env_cfg(args.task, num_envs=1)
+        env_cfg = parse_env_cfg(args.task, device=args.device or "cuda:0", num_envs=1)
         agent_cfg = load_cfg_from_registry(args.task, "rsl_rl_cfg_entry_point")
+        agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, importlib.metadata.version("rsl-rl-lib"))
+        agent_cfg.device = env_cfg.sim.device
+        env_cfg.seed = agent_cfg.seed
+        env_cfg.viewer.eye = (3.0, 3.0, 2.0)
+        env_cfg.viewer.lookat = (0.0, 0.0, 0.3)
+        env_cfg.viewer.origin_type = "asset_root"
+        env_cfg.viewer.asset_name = "robot"
         if agent_cfg.class_name != "OnPolicyRunner":
             raise RuntimeError(f"unsupported runner: {agent_cfg.class_name}")
         env = RslRlVecEnvWrapper(gym.make(args.task, cfg=env_cfg),
@@ -67,10 +77,13 @@ def main() -> int:
         brain_dt = 1 / args.brain_hz
         bridge.warmup(brain_dt)
         obs = env.get_observations()
-        if not isinstance(obs, torch.Tensor) or obs.shape[1] != int(env_cfg.observation_space):
-            raise RuntimeError(f"unexpected CRA373 policy observation: {type(obs)} {getattr(obs, 'shape', None)}")
-        # CRA373Env._get_observations() places vx, vy, yaw command at columns 12:15.
-        # Restrict the demo to a single robot and the matching flat/rough policy family.
+        policy_obs = obs["policy"]
+        if policy_obs.shape != (1, int(env_cfg.observation_space)):
+            raise RuntimeError(f"unexpected CRA373 policy observation shape: {tuple(policy_obs.shape)}")
+        # The older gait-clock policy has three extra observations before the commands.
+        command_start = 12 if policy_obs.shape[1] in (51, 238) else 9
+        if policy_obs.shape[1] not in (48, 51, 235, 238):
+            raise RuntimeError(f"unsupported CRA373 policy observation size: {policy_obs.shape[1]}")
         cmd = bridge.tick(0.0, brain_dt)
         rows = []
         last_label = None
@@ -82,23 +95,26 @@ def main() -> int:
             started = time.monotonic()
             t = k * dt
             if t + 1e-9 >= next_brain_tick:
-                yaw_dps = float(env.unwrapped._to_control_frame(
-                    env.unwrapped._robot.data.root_ang_vel_b)[0, 2].item()) * 180 / math.pi
+                # CRA373 +yaw is left; FlyDrones haltere input expects +yaw right.
+                ang_vel_b = env.unwrapped._robot.data.root_ang_vel_b.torch
+                if hasattr(env.unwrapped, "_to_control_frame"):
+                    ang_vel_b = env.unwrapped._to_control_frame(ang_vel_b)
+                yaw_dps = -float(ang_vel_b[0, 2].item()) * 180 / math.pi
                 cmd = bridge.tick(t, brain_dt, yaw_rate_dps=yaw_dps)
                 next_brain_tick += brain_dt
-            ranges = env_cfg.command_ranges
+            ranges = getattr(env_cfg, "command_ranges", ((-1.0, 1.0),) * 3)
             values = [cmd.forward, cmd.lateral, cmd.yaw]
             limited = [max(lo, min(hi, val)) for val, (lo, hi) in zip(values, ranges)]
             with torch.inference_mode():
                 env.unwrapped._commands[0] = torch.tensor(limited, device=env.unwrapped.device)
-                obs[:, 12:15] = env.unwrapped._commands
+                obs["policy"][:, command_start:command_start + 3] = env.unwrapped._commands
                 actions = policy(obs)
                 obs, _, _, _ = env.step(actions)
             if cmd.gesture != last_label:
                 print(f"t={t:5.1f}s  {cmd.gesture:<24} vx={limited[0]:+.2f} vy={limited[1]:+.2f} yaw={limited[2]:+.2f}")
                 last_label = cmd.gesture
             if args.csv:
-                pos = env.unwrapped._robot.data.root_pos_w[0]
+                pos = env.unwrapped._robot.data.root_pos_w.torch[0]
                 rows.append(dict(t=t, gesture=cmd.gesture, vx=limited[0], vy=limited[1],
                                  yaw=limited[2], escape=cmd.escape, x=float(pos[0]), y=float(pos[1])))
             if args.real_time:

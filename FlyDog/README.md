@@ -50,7 +50,7 @@ The preview shows neural activity, velocity commands and a **kinematic command p
 
 ## 2. Run the trained dog in Isaac Sim
 
-Prerequisites: a working Isaac Lab/Isaac Sim installation that already runs CRA373's `scripts/rsl_rl/play.py`, the CRA373 repository with its USD assets, and a compatible RSL-RL `model_*.pt` checkpoint. **No checkpoint is included in these repositories.** Use the same task family and observation dimensions as the checkpoint's training run: Flat/Flat-Run = 51, Rough/Slope = 238.
+Prerequisites: a working Isaac Lab/Isaac Sim installation that already runs CRA373's `scripts/rsl_rl/play.py`, the CRA373 repository with its USD assets, and a compatible RSL-RL `model_*.pt` checkpoint. **No checkpoint is included in these repositories.** Use the same task family and observation dimensions as the checkpoint's training run: the newer CRA373_12313 environment uses Flat = 48 and Rough = 235; the older gait-clock environment uses Flat/Flat-Run = 51 and Rough/Slope = 238.
 
 Install FlyDog and FlyDrones into Isaac Lab's Python environment, for example from the Isaac Lab root:
 

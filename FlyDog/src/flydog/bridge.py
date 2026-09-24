@@ -54,9 +54,11 @@ class FlyDogBridge:
         rates = self.brain.tick(self.encoder.encode(vision, yaw_rate_dps), ms=dt * 1000)
         flight = self.decoder.update(rates, dt)
         # FlyDrones lift becomes forward walking; looming means stop on the ground.
+        # FlyDrones +yaw/+lateral mean right. CRA373's control frame uses +yaw/+y
+        # for left, so both signed axes must be inverted.
         forward = max(-1.0, min(1.0, flight.throttle + flight.forward)) * self.forward_mps
-        lateral = max(-1.0, min(1.0, flight.lateral)) * self.lateral_mps
-        yaw = max(-1.0, min(1.0, flight.yaw)) * self.yaw_rps
+        lateral = -max(-1.0, min(1.0, flight.lateral)) * self.lateral_mps
+        yaw = -max(-1.0, min(1.0, flight.yaw)) * self.yaw_rps
         if flight.escape:
             forward = lateral = yaw = 0.0
         return DogCommand(forward, lateral, yaw, flight.escape, gesture.label, rates)
