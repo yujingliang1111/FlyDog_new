@@ -54,9 +54,14 @@ Prerequisites: a working Isaac Lab/Isaac Sim installation that already runs CRA3
 Install FlyDog and FlyDrones into Isaac Lab's Python environment. Run these commands from the Isaac Lab root directory:
 
 ```bash
+conda activate env_isaaclab_2
+cd /home/dog101/IsaacLab
+
 ./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDrones
 ./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDog
 ```
+
+Do not use Conda's `base` environment on this workstation: it currently uses Python 3.14, while Isaac Sim 6.x requires Python 3.12. The dashboard uses GUI-enabled OpenCV when available and falls back to Tk when Isaac Sim provides a headless OpenCV build.
 
 Then run the CRA373 viewer demo:
 
@@ -66,10 +71,20 @@ Then run the CRA373 viewer demo:
   --checkpoint /home/dog101/CRA373_new/CRA373_12313/logs/rsl_rl/cra373_flat/2026-09-22_16-06-36/model_3550.pt \
   --task CRA373-Flat-v0 \
   --seconds 18 \
-  --real-time
+  --real-time \
+  --live
 ```
 
-The command must be run from the Isaac Lab root directory, where `isaaclab.sh` is located. Change the checkpoint path when using a different training run. Omit `--real-time` to run as fast as the simulation allows, or add `--headless` for a display-free run. The control loop updates the fly brain at 20 Hz and runs the trained policy at CRA373's environment step rate. The Isaac viewer shows the actual simulated robot walking.
+The command must be run from the Isaac Lab root directory, where `isaaclab.sh` is located. Change the checkpoint path when using a different training run. Omit `--real-time` to run as fast as the simulation allows, omit `--live` to disable the neural dashboard, or add `--viz none` for a display-free run. The control loop updates the fly brain at 20 Hz and runs the trained policy at CRA373's environment step rate. The Isaac viewer shows the actual simulated robot walking.
+
+`--live` opens a second, FlyDrones-style dashboard alongside Isaac Sim. Its panels show:
+
+- the false-colour ommatidia stimulus delivered to the left and right fly eyes;
+- a live spike raster and descending-neuron firing rates;
+- the simulated CRA373 position, heading, and path from above; and
+- forward, lateral, and yaw goals sent to the locomotion policy.
+
+The dashboard eye image represents the scripted optic-flow illusion in this demo, not a physical or simulated CRA373 camera. Red highlights looming, green vertical flow, and blue horizontal flow. Set `--dashboard-hz 5` to reduce rendering load; the default refresh rate is 10 Hz. Press `q` while the dashboard has focus to end the demo.
 
 For a MaleCNS brain built by FlyDrones, replace `--brain minifly` with `--brain /path/to/malecns_brain.npz`; calibrate its readout with FlyDrones first and pass a YAML override with `decoder.readout_file` using `--fly-config`. The bridge maps FlyDrones' **throttle** readout to dog forward speed, so a readout calibrated for flight should be checked in the command preview before Isaac playback.
 

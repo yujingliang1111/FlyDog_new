@@ -27,6 +27,10 @@ def main() -> int:
     parser.add_argument("--yaw-rps", type=float, default=1.0)
     parser.add_argument("--csv", type=Path)
     parser.add_argument("--real-time", action="store_true")
+    parser.add_argument("--live", action="store_true",
+                        help="open a FlyDrones-style fly-eye/brain/CRA373 dashboard")
+    parser.add_argument("--dashboard-hz", type=float, default=10.0,
+                        help="live dashboard refresh rate (default: 10)")
     from isaaclab.app import AppLauncher
     AppLauncher.add_app_launcher_args(parser)
     args = parser.parse_args()
@@ -38,13 +42,15 @@ def main() -> int:
         parser.error(f"not a CRA373 repository: {root}")
     if not checkpoint.is_file():
         parser.error(f"checkpoint not found: {checkpoint}")
-    if args.seconds <= 0 or args.brain_hz <= 0:
-        parser.error("seconds and brain-hz must be positive")
+    if args.seconds <= 0 or args.brain_hz <= 0 or args.dashboard_hz <= 0:
+        parser.error("seconds, brain-hz, and dashboard-hz must be positive")
     os.environ["CRA373_ROOT"] = str(root)
     sys.path.insert(0, str(root))
     sys.path.insert(0, str(project / "src"))
     app = AppLauncher(args).app
     env = None
+    dashboard = None
+    dashboard_window = None
     try:
         import gymnasium as gym
         import torch
@@ -73,6 +79,11 @@ def main() -> int:
         policy = runner.get_inference_policy(device=env.unwrapped.device)
         bridge = FlyDogBridge(brain_source=args.brain, fly_config=args.fly_config,
                               forward_mps=args.forward_mps, yaw_rps=args.yaw_rps)
+        if args.live:
+            from flydog.dashboard import DashboardWindow, FlyDogDashboard
+
+            dashboard = FlyDogDashboard(bridge)
+            dashboard_window = DashboardWindow("FlyDog · eyes, brain, and CRA373")
         dt = float(env.unwrapped.step_dt)
         brain_dt = 1 / args.brain_hz
         bridge.warmup(brain_dt)
@@ -88,6 +99,7 @@ def main() -> int:
         rows = []
         last_label = None
         next_brain_tick = brain_dt
+        next_dashboard_frame = 0.0
         print(f"FlyDog Isaac demo | {args.task} | {checkpoint}")
         for k in range(int(args.seconds / dt)):
             if not app.is_running():
@@ -102,6 +114,20 @@ def main() -> int:
                 yaw_dps = -float(ang_vel_b[0, 2].item()) * 180 / math.pi
                 cmd = bridge.tick(t, brain_dt, yaw_rate_dps=yaw_dps)
                 next_brain_tick += brain_dt
+                if dashboard is not None:
+                    root_pos = env.unwrapped._robot.data.root_pos_w.torch[0]
+                    root_quat = env.unwrapped._robot.data.root_quat_w.torch[0]
+                    # Isaac Lab stores quaternions as (w, x, y, z).
+                    qw, qx, qy, qz = (float(value.item()) for value in root_quat)
+                    yaw = math.atan2(2 * (qw * qz + qx * qy),
+                                     1 - 2 * (qy * qy + qz * qz))
+                    dashboard.push(t, cmd, float(root_pos[0].item()), float(root_pos[1].item()))
+                    if t + 1e-9 >= next_dashboard_frame:
+                        frame = dashboard.render(t, cmd, float(root_pos[0].item()),
+                                                 float(root_pos[1].item()), yaw)
+                        if not dashboard_window.show(frame):
+                            break
+                        next_dashboard_frame += 1 / args.dashboard_hz
             ranges = getattr(env_cfg, "command_ranges", ((-1.0, 1.0),) * 3)
             values = [cmd.forward, cmd.lateral, cmd.yaw]
             limited = [max(lo, min(hi, val)) for val, (lo, hi) in zip(values, ranges)]
@@ -130,6 +156,10 @@ def main() -> int:
             print(f"CSV saved: {args.csv}")
         return 0
     finally:
+        if dashboard_window is not None:
+            dashboard_window.close()
+        if dashboard is not None:
+            dashboard.close()
         if env is not None:
             env.close()
         app.close()

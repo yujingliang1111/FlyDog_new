@@ -12,6 +12,20 @@ This repository combines three main components:
 
 The FlyDog demo runs a trained CRA373 PPO locomotion policy in Isaac Sim. FlyDrones produces forward, lateral, and yaw commands; FlyDog maps those commands into the CRA373 control frame; the trained policy converts them into the robot's 12 joint actions.
 
+## Project goal
+
+The goal is to study a layered, biologically inspired control system for a quadruped: a simulated fruit-fly nervous system chooses high-level motion from visual stimuli, while a learned CRA373 locomotion policy handles balance and joint-level walking. Keeping these layers separate makes it possible to inspect the fly brain, replace either controller independently, and work toward a later simulation-to-real deployment on the physical CRA373 robot.
+
+The current milestone is a simulation-only proof of concept. Gesture-driven optic-flow illusions stimulate the fly brain, the bridge converts descending-neuron activity into planar velocity goals, and the trained PPO policy moves the dog in Isaac Sim. A real robot camera, hardware actuation, and end-to-end sim-to-real validation remain future work.
+
+```text
+scripted visual stimulus -> fly retina -> spiking fly brain
+    -> motor decoder -> FlyDog command bridge
+    -> CRA373 PPO locomotion policy -> 12 joints -> Isaac Sim
+           ^                                      |
+           +--------- robot yaw feedback ---------+
+```
+
 ## Repository layout
 
 ```text
@@ -43,18 +57,23 @@ Before using FlyDog, confirm that the CRA373 environment can start and that its 
 
 ## Install FlyDog and FlyDrones
 
-Run the following commands from the root of your Isaac Lab installation:
+Activate the Python 3.12 environment in which Isaac Lab is installed, then run the installation commands from the root of your Isaac Lab checkout:
 
 ```bash
+conda activate env_isaaclab_2
+cd /home/dog101/IsaacLab
+
 ./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDrones
 ./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDog
 ```
 
-The editable installs allow source-code changes in this workspace to take effect without reinstalling the packages.
+Do not run the demo from Conda's `base` environment. On this workstation, `base` uses Python 3.14, but Isaac Sim 6.x requires Python 3.12. You can confirm the selected interpreter with `./isaaclab.sh -p -c "import sys; print(sys.executable, sys.version)"`.
+
+The editable installs allow source-code changes in this workspace to take effect without reinstalling the packages. The dashboard uses a GUI-enabled OpenCV build when available and automatically falls back to Tk when Isaac Sim provides headless OpenCV.
 
 ## Run the FlyDog Isaac Sim demo
 
-From the Isaac Lab root directory, run:
+From the Isaac Lab root directory, with `env_isaaclab_2` still active, run:
 
 ```bash
 ./isaaclab.sh -p /home/dog101/CRA373_new/FlyDog/isaac_demo.py \
@@ -62,7 +81,8 @@ From the Isaac Lab root directory, run:
   --checkpoint /home/dog101/CRA373_new/CRA373_12313/logs/rsl_rl/cra373_flat/2026-09-22_16-06-36/model_3550.pt \
   --task CRA373-Flat-v0 \
   --seconds 18 \
-  --real-time
+  --real-time \
+  --live
 ```
 
 Options:
@@ -70,7 +90,70 @@ Options:
 - Change `--checkpoint` to use another trained model.
 - Change `--seconds` to adjust the demo duration.
 - Omit `--real-time` to run without real-time pacing.
-- Add `--headless` to run without the Isaac Sim viewer.
+- Omit `--live` to disable the separate fly-eye/brain dashboard.
+- Use `--dashboard-hz 5` if dashboard rendering is too expensive (default: 10 Hz).
+- Add `--viz none` and omit `--live` for a display-free run.
+
+With `--live`, a second window complements the Isaac viewer. It displays the false-colour stimulus reaching the fly's two eyes, live neural spikes and descending-neuron rates, the CRA373 path from above, and the resulting velocity goals. The eye panel currently visualizes scripted ommatidia input; it is not a CRA373 camera feed.
+
+## 即時畫面與控制流程說明
+
+### 畫面顯示什麼
+
+- `FLY EYES`：果蠅左右複眼收到的簡化光流刺激，不是一般相機影像。目前紅色代表物體接近造成的擴張（looming），綠色代表垂直光流，藍色代表水平光流。
+- `FLY BRAIN`：果蠅脈衝神經網路的即時放電圖。每一個短線代表一次神經元 spike，顏色用來區分感覺輸入神經元、中間神經元與下降輸出神經元。
+- `DESCENDING NEURONS`：下降神經元目前的平均放電頻率（Hz）。這些是果蠅神經系統提供給運動解碼器的輸出。
+- `CRA373 SCENE`：CRA373 在 Isaac Sim 中的俯視位置、朝向與移動軌跡。
+- `CRA373 VELOCITY GOALS`：目前送給 PPO locomotion policy 的前進速度、側移速度與旋轉速度目標。
+- `COMMAND HISTORY`：最近一段時間內三個速度目標的變化。
+
+### 速度命令是自己辨識的，還是程式寫好的？
+
+兩者各負責不同部分。果蠅神經網路會根據視覺刺激和神經連接，自行產生當下的神經放電；但是「如何把神經輸出解讀成 CRA373 的速度命令」是原始碼中明確寫好的規則，不是系統在執行時自己發現或學會的。Git 紀錄顯示這套 FlyDog 轉換原本由 `yujingliang1111` 提交，之後又調整了 CRA373 左右方向的符號。
+
+主要轉換寫在 `FlyDog/src/flydog/bridge.py`：
+
+```text
+forward = clip(flight.throttle + flight.forward) × forward_mps
+lateral = -clip(flight.lateral) × lateral_mps
+yaw     = -clip(flight.yaw) × yaw_rps
+
+如果觸發 escape：forward = lateral = yaw = 0
+```
+
+負號用來修正 FlyDrones 與 CRA373 控制座標中左右方向的定義差異。`forward_mps`、`lateral_mps` 和 `yaw_rps` 則限制命令的實際尺度。接著 `isaac_demo.py` 會再依照訓練環境允許的 command range 進行裁切。
+
+因此，各層的性質如下：
+
+| 階段 | 目前如何產生 | 是否自行學習 |
+|---|---|---|
+| 示範手勢 | 預先寫好的時間表 | 否 |
+| 手勢轉光流 | `GestureIllusion` 的固定規則 | 否 |
+| 果蠅神經放電 | 由 connectome 與 LIF 神經動態對刺激產生 | 執行時自行反應，但不是在線學習 |
+| 神經輸出轉飛行意圖 | `MotorDecoder` 的設定與規則 | 否 |
+| 飛行意圖轉 CRA373 速度 | `FlyDogBridge` 的固定公式 | 否 |
+| 速度目標轉 12 個關節動作 | 已訓練的 PPO locomotion policy | 是，來自先前的強化學習訓練；示範時只做推論 |
+
+### 果蠅怎麼知道手在移動？
+
+在目前的 `isaac_demo.py` 中，果蠅其實沒有透過攝影機看見操作者的手。程式使用 FlyDrones 的 `demo_timeline()` 預先安排手勢：
+
+- 0–2.5 秒：沒有手
+- 2.5 秒：張開手掌
+- 4.5 秒：握拳
+- 9.5 秒：拳頭移向右方
+- 12 秒：拳頭回到中央
+- 13.5 秒：手快速接近相機
+- 15.5 秒：手離開畫面
+
+`GestureIllusion` 會把這些標籤轉成果蠅可能看到的光流，而不是直接把「向左」、「向右」等命令交給神經網路。例如：
+
+- 張開手掌會產生垂直光流，模擬果蠅正在下沉。
+- 手向右移動會產生左右眼不對稱的旋轉光流，引發視動反射。
+- 手快速接近會產生擴張光流，刺激 looming-sensitive 路徑並可能觸發 escape；FlyDog 會在 escape 時讓機器人停止。
+- 手離開畫面會產生相反方向的垂直光流。
+
+所以目前看到的是「腳本手勢 → 模擬視覺刺激 → 果蠅神經反應 → 固定速度轉換 → PPO 步態」的概念驗證。FlyDrones 雖然具有 MediaPipe/OpenCV 的真實 webcam 手勢辨識功能，但它尚未接入這個 CRA373 Isaac 示範；若要用真實手勢控制，仍需把 webcam 的 `GestureState` 接到 FlyDog 控制迴圈。
 
 Training checkpoints and logs are local artifacts and are intentionally excluded from Git.
 

@@ -41,6 +41,11 @@ class FlyDogBridge:
         self.forward_mps = forward_mps
         self.lateral_mps = lateral_mps
         self.yaw_rps = yaw_rps
+        # Expose the latest sensory state for live visualizers.  Keeping this
+        # on the bridge avoids running the retina/illusion pipeline twice.
+        self.last_vision = self.retina.encode(None)
+        self.last_gesture = None
+        self.last_flight = None
 
     def warmup(self, dt: float = 0.05) -> None:
         for _ in range(int((self.decoder.settle_s + 0.1) / dt) + 1):
@@ -53,6 +58,9 @@ class FlyDogBridge:
         vision = self.illusion.apply(self.retina.encode(None), gesture, t)
         rates = self.brain.tick(self.encoder.encode(vision, yaw_rate_dps), ms=dt * 1000)
         flight = self.decoder.update(rates, dt)
+        self.last_vision = vision
+        self.last_gesture = gesture
+        self.last_flight = flight
         # FlyDrones lift becomes forward walking; looming means stop on the ground.
         # FlyDrones +yaw/+lateral mean right. CRA373's control frame uses +yaw/+y
         # for left, so both signed axes must be inverted.
