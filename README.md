@@ -1,256 +1,134 @@
-# CRA373
+# CRA373 New
 
-Reinforcement Learning and Simulation Environment for the CRA373 Quadruped Robot.
-
-This repository contains the simulation model, actuator configuration, reinforcement learning environments, perception modules, and training/evaluation scripts developed for the CRA373 quadruped robot using **NVIDIA Isaac Lab**.
+Linux development workspace for the CRA373 quadruped robot, its NVIDIA Isaac Lab reinforcement-learning environments, and the FlyDog neural controller integration.
 
 ## Overview
 
-The main goal of this project is to develop and evaluate reinforcement learning-based locomotion and control policies for the CRA373 quadruped robot in simulation, with future deployment toward the physical robot.
+This repository combines three main components:
 
-The project currently focuses on:
+- `CRA373_12313`: the current CRA373 robot model, Isaac Lab environments, terrain definitions, rewards, and RSL-RL training scripts.
+- `FlyDog`: the bridge that converts FlyDrones neural-controller output into CRA373 planar velocity commands.
+- `FlyDrones`: the fly-inspired neural controller used by FlyDog.
 
-* Quadruped locomotion using Reinforcement Learning (RL)
-* Isaac Lab simulation and environment development
-* Custom actuator modeling
-* Terrain perception and terrain-aware locomotion
-* Affordance-based terrain information
-* PPO-based policy training
-* Simulation-to-Real preparation
-* Robot model and sensor configuration
+The FlyDog demo runs a trained CRA373 PPO locomotion policy in Isaac Sim. FlyDrones produces forward, lateral, and yaw commands; FlyDog maps those commands into the CRA373 control frame; the trained policy converts them into the robot's 12 joint actions.
 
-## Repository Structure
+## Repository layout
 
 ```text
-CRA373/
-├── CRA373_model/
-│   ├── configuration/
-│   ├── meshes/
-│   ├── cra373.urdf
-│   ├── cra373.usd
-│   └── config.yaml
-│
-├── cra373/
-│   ├── actuator/
-│   │   └── XB42M.py
-│   │
-│   ├── affordance/
-│   │   └── terrain_affordance.py
-│   │
-│   ├── envs/
-│   │   ├── agents/
-│   │   ├── mdp/
-│   │   ├── CRA373.py
-│   │   ├── cra373_env.py
-│   │   ├── cra373_env_cfg.py
-│   │   ├── flat_env_cfg.py
-│   │   ├── rough_env_cfg.py
-│   │   ├── jump_env_cfg.py
-│   │   └── parkour_env_cfg.py
-│   │
-│   ├── perception/
-│   │   └── terrain_encoder.py
-│   │
-│   ├── policies/
-│   │   └── policy_manager.py
-│   │
-│   └── skill_selection/
-│       └── skill_selector.py
-│
-├── manager_based_check/  # Previous implementation / reference code
-│   ├── CRA373/
-│   ├── mdp/
-│   └── parkour/
-│
-├── scripts/
-│   └── rsl_rl/
-│       ├── train.py
-│       ├── play.py
-│       ├── play_affordance.py
-│       └── cli_args.py
-│
-└── .gitignore
-```
-> **Note:** `manager_based_check/` contains previous implementation files and is kept for reference and comparison. It is **not the main implementation** currently used for CRA373 development.
-
-## Robot Model
-
-The `CRA373_model` directory contains the simulation assets for the CRA373 quadruped robot, including:
-
-* USD robot model
-* URDF model
-* Robot configuration files
-* Physics configuration
-* Sensor configuration
-* STL meshes
-
-These assets are used to construct and simulate the CRA373 robot in Isaac Lab.
-
-## Actuator Model
-
-The project includes a custom actuator model for the CRA373 robot:
-
-```text
-cra373/actuator/XB42M.py
+CRA373_new/
+├── CRA373_12313/
+│   ├── CRA373_model/       Robot USD, URDF, configuration, and meshes
+│   ├── cra373/             Isaac Lab environments and actuator model
+│   ├── scripts/rsl_rl/     Training and policy playback scripts
+│   └── logs/               Local training outputs (ignored by Git)
+├── FlyDog/
+│   ├── isaac_demo.py       FlyDog and CRA373 Isaac Sim integration
+│   └── src/flydog/         Neural-to-locomotion command bridge
+├── FlyDrones/              Fly-inspired neural controller
+└── README.md
 ```
 
-The actuator model is intended to represent the characteristics of the XB42M-based joint actuators used by the robot.
-
-The actuator modeling work includes:
-
-* Position control behavior
-* Motor torque limitations
-* Torque-speed characteristics
-* Actuator dynamics
-* Simulation-to-real actuator calibration
-
-The actuator model will be further refined as additional hardware and motor parameters become available.
-
-## Reinforcement Learning
-
-The project uses reinforcement learning to learn quadruped locomotion policies.
-
-The current training pipeline is based on **PPO (Proximal Policy Optimization)** and the RSL-RL framework.
-
-Training scripts are located at:
-
-```text
-scripts/rsl_rl/
-```
-
-Main scripts:
-
-```text
-train.py
-play.py
-play_affordance.py
-```
-
-### Training
-
-A typical training command is:
-
-```bash
-./isaaclab.sh -p scripts/rsl_rl/train.py --task CRA373-Flat-v0
-```
-
-### Policy Evaluation
-
-A trained policy can be evaluated using:
-
-```bash
-./isaaclab.sh -p scripts/rsl_rl/play.py \
-    --task CRA373-Flat-v0 \
-    --checkpoint <PATH_TO_CHECKPOINT>
-```
-
-The exact task and checkpoint path depend on the current experiment configuration.
-
-## Environment
-
-The main environment implementation is located in:
-
-```text
-cra373/envs/
-```
-
-Different environments are provided for different locomotion scenarios:
-
-* Flat terrain
-* Rough terrain
-* Jumping
-* Parkour
-* Terrain-aware locomotion
-
-Reward functions, termination conditions, and curriculum mechanisms are implemented under:
-
-```text
-cra373/envs/mdp/
-```
-
-## Perception
-
-The project also includes terrain perception and terrain representation modules:
-
-```text
-cra373/perception/
-cra373/affordance/
-```
-
-The long-term goal is to incorporate terrain information into the locomotion policy and investigate perception-aware control.
-
-## Simulation-to-Real
-
-A major objective of the project is to reduce the gap between simulation and the physical CRA373 robot.
-
-Current areas of investigation include:
-
-### Actuator
-
-* Motor torque-speed characteristics
-* Position controller parameters
-* Joint dynamics
-* Actuator delay
-* Motor/gearbox characteristics
-
-### Observation
-
-* IMU measurements
-* Joint position
-* Joint velocity
-* Joint torque/current feedback
-* Sensor noise
-* Observation delay
-
-### Simulation
-
-* Contact dynamics
-* Friction
-* Mass and inertia
-* Joint damping
-* Ground interaction
-* Sensor placement
-
-The actuator and sensor models will be calibrated using measurements from the physical robot as hardware information becomes available.
-
-## Development Status
-
-### Completed / In Progress
-
-* [x] CRA373 robot model integration
-* [x] Isaac Lab simulation environment
-* [x] Custom actuator implementation
-* [x] PPO locomotion training pipeline
-* [x] Flat terrain environment
-* [x] Rough terrain environment
-* [x] Jumping environment
-* [x] Terrain perception modules
-* [x] Affordance-related modules
-* [ ] Actuator model calibration
-* [ ] Sensor noise and delay calibration
-* [ ] Sim-to-Real validation
-* [ ] Physical robot deployment
+`CRA373_12313` is the current CRA373 implementation used by the examples in this README.
 
 ## Requirements
 
-The project is developed using:
+- Ubuntu or another supported Linux distribution
+- NVIDIA GPU and a compatible NVIDIA driver
+- NVIDIA Isaac Sim
+- NVIDIA Isaac Lab
+- Python and PyTorch versions provided by Isaac Lab
+- RSL-RL
 
-* NVIDIA Isaac Lab
-* NVIDIA Isaac Sim
-* Python
-* PyTorch
-* RSL-RL
+Before using FlyDog, confirm that the CRA373 environment can start and that its trained checkpoint is compatible with the selected task. The current flat environment uses 48 policy observations, while the current rough environment uses 235.
 
-The exact versions depend on the current development environment.
+## Install FlyDog and FlyDrones
+
+Run the following commands from the root of your Isaac Lab installation:
+
+```bash
+./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDrones
+./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDog
+```
+
+The editable installs allow source-code changes in this workspace to take effect without reinstalling the packages.
+
+## Run the FlyDog Isaac Sim demo
+
+From the Isaac Lab root directory, run:
+
+```bash
+./isaaclab.sh -p /home/dog101/CRA373_new/FlyDog/isaac_demo.py \
+  --cra373-root /home/dog101/CRA373_new/CRA373_12313 \
+  --checkpoint /home/dog101/CRA373_new/CRA373_12313/logs/rsl_rl/cra373_flat/2026-09-22_16-06-36/model_3550.pt \
+  --task CRA373-Flat-v0 \
+  --seconds 18 \
+  --real-time
+```
+
+Options:
+
+- Change `--checkpoint` to use another trained model.
+- Change `--seconds` to adjust the demo duration.
+- Omit `--real-time` to run without real-time pacing.
+- Add `--headless` to run without the Isaac Sim viewer.
+
+Training checkpoints and logs are local artifacts and are intentionally excluded from Git.
+
+## Train a CRA373 policy
+
+From the Isaac Lab root directory:
+
+```bash
+./isaaclab.sh -p /home/dog101/CRA373_new/CRA373_12313/scripts/rsl_rl/train.py \
+  --task CRA373-Flat-v0
+```
+
+Training output is written below:
+
+```text
+CRA373_12313/logs/rsl_rl/
+```
+
+## Play a trained CRA373 policy
+
+To evaluate the CRA373 policy without FlyDog:
+
+```bash
+./isaaclab.sh -p /home/dog101/CRA373_new/CRA373_12313/scripts/rsl_rl/play.py \
+  --task CRA373-Flat-v0 \
+  --checkpoint /path/to/model.pt
+```
+
+## Available environments
+
+The main environment configurations are located in `CRA373_12313/cra373/envs/` and include:
+
+- Flat terrain locomotion
+- Rough terrain locomotion
+- Jumping
+- Parkour
+- Terrain-aware locomotion experiments
+
+Reward functions, curricula, and termination conditions are located in `CRA373_12313/cra373/envs/mdp/`.
+
+## Robot assets and actuator model
+
+Robot assets are stored in `CRA373_12313/CRA373_model/`:
+
+- USD simulation assets
+- URDF robot description
+- Visual and collision meshes
+- Physics and sensor configuration
+
+The custom XB42M actuator model is located at `CRA373_12313/cra373/actuator/XB42M.py`.
 
 ## Notes
 
-This repository is primarily intended for research and development of the CRA373 quadruped robot.
-
-The implementation is actively under development, and interfaces, configurations, reward functions, actuator models, and training settings may change as the project progresses.
+- This project currently targets simulation and research workflows.
+- Do not commit private or large training checkpoints unless they are intentionally being released.
+- Keep the task name, observation layout, and checkpoint architecture compatible.
+- The absolute paths in the examples match the current Linux workstation. Update them if the repository is moved.
 
 ## Author
 
-**Yujing Liang**
-
-GitHub: [yujingliang1111](https://github.com/yujingliang1111)
+Yujing Liang — [GitHub](https://github.com/yujingliang1111)

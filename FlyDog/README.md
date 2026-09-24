@@ -25,23 +25,22 @@ FlyDog/
 
 FlyDog can be pushed to its own GitHub repository. It does not copy source files or model assets from the two upstream projects. Clone/install those projects alongside it. Do not upload private checkpoints unless you intend to share them.
 
-## 1. Install the command preview
+## 1. Install the command preview on Linux
 
 Prerequisites: Python 3.10+ and a clone of FlyDrones. From a folder containing both `FlyDog/` and `FlyDrones/`:
 
-```powershell
-cd FlyDog
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -e ..\FlyDrones
+```bash
+cd /home/dog101/CRA373_new/FlyDog
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ../FlyDrones
 python -m pip install -e .
 ```
 
-On Linux, activate with `source .venv/bin/activate` and use `../FlyDrones`.
-
 Run the command preview without Isaac Lab or a checkpoint:
 
-```powershell
+```bash
 flydog-demo --seconds 18 --live
 flydog-demo --seconds 18 --record outputs/flydog.gif --csv outputs/commands.csv
 ```
@@ -52,26 +51,25 @@ The preview shows neural activity, velocity commands and a **kinematic command p
 
 Prerequisites: a working Isaac Lab/Isaac Sim installation that already runs CRA373's `scripts/rsl_rl/play.py`, the CRA373 repository with its USD assets, and a compatible RSL-RL `model_*.pt` checkpoint. **No checkpoint is included in these repositories.** Use the same task family and observation dimensions as the checkpoint's training run: the newer CRA373_12313 environment uses Flat = 48 and Rough = 235; the older gait-clock environment uses Flat/Flat-Run = 51 and Rough/Slope = 238.
 
-Install FlyDog and FlyDrones into Isaac Lab's Python environment, for example from the Isaac Lab root:
+Install FlyDog and FlyDrones into Isaac Lab's Python environment. Run these commands from the Isaac Lab root directory:
 
-```powershell
-.\isaaclab.bat -p -m pip install -e E:\ITRI\RL\CRA373_new\FlyDrones
-.\isaaclab.bat -p -m pip install -e E:\ITRI\RL\CRA373_new\FlyDog
+```bash
+./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDrones
+./isaaclab.sh -p -m pip install -e /home/dog101/CRA373_new/FlyDog
 ```
 
-Then run the viewer demo (replace the checkpoint path):
+Then run the CRA373 viewer demo:
 
-```powershell
-.\isaaclab.bat -p E:\ITRI\RL\CRA373_new\FlyDog\isaac_demo.py `
-  --cra373-root E:\ITRI\RL\CRA373_new\CRA373 `
-  --checkpoint C:\path\to\model_300.pt `
-  --task CRA373-Flat-v0 `
-  --seconds 18 `
-  --real-time `
-  --csv E:\ITRI\RL\CRA373_new\FlyDog\outputs\isaac_trace.csv
+```bash
+./isaaclab.sh -p /home/dog101/CRA373_new/FlyDog/isaac_demo.py \
+  --cra373-root /home/dog101/CRA373_new/CRA373_12313 \
+  --checkpoint /home/dog101/CRA373_new/CRA373_12313/logs/rsl_rl/cra373_flat/2026-09-22_16-06-36/model_3550.pt \
+  --task CRA373-Flat-v0 \
+  --seconds 18 \
+  --real-time
 ```
 
-On Linux use `./isaaclab.sh -p /path/to/FlyDog/isaac_demo.py` and Linux paths. Omit `--real-time` to run as fast as the simulation allows. Add `--headless` for a display-free run. The control loop updates the fly brain at 20 Hz and runs the trained policy at CRA373's environment step rate. The Isaac viewer shows the actual simulated robot walking.
+The command must be run from the Isaac Lab root directory, where `isaaclab.sh` is located. Change the checkpoint path when using a different training run. Omit `--real-time` to run as fast as the simulation allows, or add `--headless` for a display-free run. The control loop updates the fly brain at 20 Hz and runs the trained policy at CRA373's environment step rate. The Isaac viewer shows the actual simulated robot walking.
 
 For a MaleCNS brain built by FlyDrones, replace `--brain minifly` with `--brain /path/to/malecns_brain.npz`; calibrate its readout with FlyDrones first and pass a YAML override with `decoder.readout_file` using `--fly-config`. The bridge maps FlyDrones' **throttle** readout to dog forward speed, so a readout calibrated for flight should be checked in the command preview before Isaac playback.
 
@@ -84,4 +82,4 @@ For a MaleCNS brain built by FlyDrones, replace `--brain minifly` with `--brain 
 | `yaw` | yaw rate | ±1.0 rad/s |
 | giant-fiber escape | stop all velocity commands | 0 |
 
-The Isaac script also clamps goals to the selected CRA373 task's training command ranges. Adjust `--forward-mps` and `--yaw-rps` conservatively to stay within the trained policy's behavior. The bridge reads and writes CRA373's current `DirectRLEnv` internals (`_commands`, observation columns 12:15); changes to CRA373's observation layout require updating the bridge. The current demo is simulation-only and does not command physical hardware.
+The Isaac script also clamps goals to the selected CRA373 task's training command ranges. Adjust `--forward-mps` and `--yaw-rps` conservatively to stay within the trained policy's behavior. The bridge writes CRA373's current `DirectRLEnv` command buffer and supports the current 48/235-observation layouts as well as the older 51/238-observation gait-clock layouts. Other observation layouts require updating the integration. The current demo is simulation-only and does not command physical hardware.
