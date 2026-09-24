@@ -100,12 +100,32 @@ With `--live`, a second window complements the Isaac viewer. It displays the fal
 
 ### 畫面顯示什麼
 
-- `FLY EYES`：果蠅左右複眼收到的簡化光流刺激，不是一般相機影像。目前紅色代表物體接近造成的擴張（looming），綠色代表垂直光流，藍色代表水平光流。
-- `FLY BRAIN`：果蠅脈衝神經網路的即時放電圖。每一個短線代表一次神經元 spike，顏色用來區分感覺輸入神經元、中間神經元與下降輸出神經元。
-- `DESCENDING NEURONS`：下降神經元目前的平均放電頻率（Hz）。這些是果蠅神經系統提供給運動解碼器的輸出。
-- `CRA373 SCENE`：CRA373 在 Isaac Sim 中的俯視位置、朝向與移動軌跡。
-- `CRA373 VELOCITY GOALS`：目前送給 PPO locomotion policy 的前進速度、側移速度與旋轉速度目標。
-- `COMMAND HISTORY`：最近一段時間內三個速度目標的變化。
+- `FLY EYES`
+  - 顯示送進果蠅視覺系統的左右眼刺激。
+  - 這是果蠅複眼感受到的簡化光流（optic flow），不是一般相機照片。
+  - 顏色含義：
+    - 紅色：物體快速接近，產生 looming／碰撞威脅。
+    - 綠色：上下方向的視覺移動。
+    - 藍色：左右方向的視覺移動。
+- `FLY BRAIN`
+  - 顯示果蠅神經網路內神經元的即時放電。
+  - 每一個小點或短線代表一次 spike。
+  - 不同顏色區分感覺神經元、中間神經元和輸出神經元。
+- `DESCENDING NEURONS`
+  - 顯示下降神經元的放電頻率，單位是 Hz。
+  - 這些神經元是果蠅大腦送往運動系統的輸出。
+  - FlyDog 會把這些輸出轉換成機器人的前進、側移與旋轉命令。
+- `CRA373 SCENE`
+  - 從上方顯示 CRA373 的實際模擬位置。
+  - 綠線是機器人走過的路徑。
+  - 箭頭代表目前朝向。
+- `CRA373 VELOCITY GOALS`
+  - 顯示送給 PPO 步態策略的速度目標：
+    - `forward`：前進速度。
+    - `lateral`：橫向移動速度。
+    - `yaw`：旋轉速度。
+- `COMMAND HISTORY`
+  - 顯示最近一段時間內三個速度命令的變化。
 
 ### 速度命令是自己辨識的，還是程式寫好的？
 
